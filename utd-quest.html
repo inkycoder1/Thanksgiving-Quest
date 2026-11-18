@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Comet Quest: Thanksgiving Edition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Lora:wght@400;500&display=swap">
+<style>
+:root{--bg:#fbeedb;--ink:#0f2a1e;--muted:#3d5a4b;--or:#e87500;--gr:#7a3b12;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f130a;--ink:#eaf5ee;--muted:#9bb8a8;--or:#ff9a2e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Lora,Georgia,serif;display:flex;justify-content:center}
+main{width:100%;max-width:820px;padding:16px 12px 28px}
+h1{font-family:Cinzel,Georgia,serif;font-size:1.7rem;margin:0;text-align:center;letter-spacing:.02em}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+.hint{margin:0;font-size:.95rem;color:var(--muted);flex:1}
+.hud{display:flex;gap:6px}
+.hud i{font-style:normal;font-size:1.5rem;color:#8a9a90;opacity:.5;transition:all .4s}
+.hud i.on{color:var(--or);opacity:1;text-shadow:0 0 10px var(--or);transform:scale(1.2)}
+.stage{position:relative;border:3px solid var(--gr);border-radius:14px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+canvas{display:block;width:100%;height:auto;touch-action:none;cursor:pointer}
+#dlg{position:absolute;left:3%;right:3%;bottom:3%;display:none;background:rgba(10,26,40,.94);border:3px solid #e9c46a;border-radius:12px;padding:14px 18px;color:#f4f1e6}
+#dlg.on{display:block}
+#dt{font-family:Cinzel,Georgia,serif;font-size:1.15rem;color:#ffb84d;margin:0 0 6px}
+#dp{margin:0 0 10px;line-height:1.55;font-size:1rem;min-height:3.2em}
+#db{font:inherit;font-weight:500;background:var(--or);color:#1a1000;border:0;border-radius:999px;padding:9px 22px;cursor:pointer;visibility:hidden}
+#db:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.pad{text-align:center;color:var(--muted);font-size:.85rem;margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+  <h1>The Comet Quest: Thanksgiving Edition</h1>
+  <div class="top"><p class="hint" id="hint"></p><div class="hud" id="hud" aria-label="Comet shards"><i>🍁</i><i>🍁</i><i>🍁</i><i>🍁</i></div></div>
+  <div class="stage">
+    <canvas id="cv" width="800" height="560" aria-label="Campus map. Walk with arrow keys, WASD, or by pressing on the map."></canvas>
+    <div id="dlg" role="dialog"><p id="dt"></p><p id="dp"></p><button id="db">Give thanks</button></div>
+  </div>
+  <p class="pad">Arrow keys or WASD to walk. On a phone, press and drag on the map.</p>
+</main>
+<script>
+var cv=document.getElementById("cv"),c=cv.getContext("2d"),W=800,H=560;
+var L=[
+{n:"McDermott Library",t:"The Blank Page",x:150,y:290,s:"I’m thankful for the blank page. Nobody can copy and paste an answer about you. Writing every week makes us create something original instead of grabbing whatever a search or a chatbot hands us first."},
+{n:"The Plinth",t:"The Gathering",x:650,y:292,s:"I’m thankful for the people around the table. Sharing our work turns a class into a community. In DMHP, it is how we actually find out who the people around us are."},
+{n:"Jindal School",t:"New Ground",x:150,y:512,s:"I’m thankful for new ground. A new topic every week means we learn about a lot of things. But we also have to turn inward and figure out what we actually think and what we value."},
+{n:"Chess Plaza",t:"Many Minds",x:650,y:512,s:"I’m thankful for every seat at the table. Same board, but everyone plays a different game. Reading each other’s answers to the same prompt shows how differently people see the world."}
+];
+var done=[],open=false,cur=-1,keys={},tgt=null,pd=false,tick=0,parts=[],fin=false;
+var hero={x:400,y:380,f:1,w:0},sp={x:380,y:350};
+var trees=[[40,300],[300,250],[500,240],[740,330],[60,470],[330,500],[480,520],[760,470],[260,360],[560,350]];
+var hint=document.getElementById("hint"),hud=document.querySelectorAll(".hud i"),dlg=document.getElementById("dlg"),
+dt=document.getElementById("dt"),dp=document.getElementById("dp"),db=document.getElementById("db");
+function say(s){hint.textContent="Comet: “"+s+"”";}
+say("Happy Thanksgiving! Four landmarks are glowing. Let’s find out why we write every week, and what we’re thankful for.");
+function R(x,y,w,h,f,r){c.fillStyle=f;if(r){c.beginPath();c.roundRect(x,y,w,h,r);c.fill();}else c.fillRect(x,y,w,h);}
+function C(x,y,r,f){c.fillStyle=f;c.beginPath();c.arc(x,y,r,0,7);c.fill();}
+function sky(){
+  var g=c.createLinearGradient(0,0,0,200);g.addColorStop(0,"#f2a65a");g.addColorStop(1,"#ffeccc");R(0,0,W,200,g);
+  var s=c.createRadialGradient(640,60,5,640,60,120);s.addColorStop(0,"rgba(255,240,180,.95)");s.addColorStop(1,"rgba(255,240,180,0)");R(0,0,W,200,s);
+  for(var i=0;i<4;i++){var cx=((i*260+tick*.15)%1000)-120,cy=40+i*28;c.fillStyle="rgba(255,255,255,.85)";
+    [[0,0,34],[30,-8,28],[58,2,30],[28,8,26]].forEach(function(p){c.beginPath();c.arc(cx+p[0],cy+p[1],p[2]*.8,0,7);c.fill();});}
+  c.fillStyle="#b86b3c";c.beginPath();c.moveTo(0,190);for(var x=0;x<=W;x+=20)c.lineTo(x,150+Math.sin(x*.01)*18+Math.sin(x*.027)*8);c.lineTo(W,200);c.fill();
+  var g2=c.createLinearGradient(0,170,0,H);g2.addColorStop(0,"#c8b24f");g2.addColorStop(1,"#8c8a35");R(0,172,W,H,g2);
+}
+function paths(){
+  c.lineCap="round";c.strokeStyle="#eadfc2";c.lineWidth=34;
+  L.forEach(function(p){c.beginPath();c.moveTo(400,390);c.lineTo(p.x,p.y+14);c.stroke();});
+  C(400,390,62,"#eadfc2");c.strokeStyle="#e87500";c.lineWidth=5;c.beginPath();c.arc(400,390,48,0,7);c.stroke();
+  C(400,390,24,"#154734");c.fillStyle="#e87500";c.font="700 20px Cinzel,serif";c.textAlign="center";c.fillText("U",400,398);
+}
+function library(x,y){R(x-72,y-104,144,104,"#dcd2ba");for(var i=0;i<6;i++)R(x-60+i*22,y-94,8,84,"#c4b99f");
+  R(x-80,y-118,160,16,"#154734");R(x-22,y-170,44,56,"#e6dcc4");C(x,y-148,10,"#fff");c.strokeStyle="#154734";c.lineWidth=2;c.beginPath();c.moveTo(x,y-148);c.lineTo(x,y-155);c.moveTo(x,y-148);c.lineTo(x+5,y-148);c.stroke();
+  c.fillStyle="#154734";c.beginPath();c.moveTo(x-28,y-170);c.lineTo(x,y-205);c.lineTo(x+28,y-170);c.fill();
+  c.fillStyle="#3a2a1a";c.beginPath();c.roundRect(x-12,y-34,24,34,[12,12,0,0]);c.fill();}
+function plinth(x,y){R(x-44,y-30,88,30,"#9aa0a6");R(x-34,y-62,68,32,"#b4bac0");R(x-24,y-96,48,34,"#cfd4d8");
+  c.fillStyle="#e87500";c.beginPath();c.moveTo(x-24,y-96);c.lineTo(x+4,y-128);c.lineTo(x+24,y-96);c.fill();
+  c.fillStyle="rgba(0,0,0,.12)";c.fillRect(x-44,y-8,88,8);}
+function jindal(x,y){R(x-92,y-84,184,84,"#f2efe6");R(x-92,y-92,184,10,"#154734");
+  for(var r=0;r<2;r++)for(var i=0;i<7;i++)R(x-84+i*25,y-72+r*28,18,20,"#7fc3e8");
+  R(x-92,y-84,22,84,"#e87500");R(x-12,y-30,24,30,"#154734");}
+function chess(x,y){for(var r=0;r<4;r++)for(var i=0;i<8;i++)R(x-96+i*24,y-46+r*18,24,18,(i+r)%2?"#2a2a2a":"#f0ece0");
+  c.strokeStyle="#154734";c.lineWidth=3;c.strokeRect(x-96,y-46,192,72);
+  [[1,1],[3,2],[5,1],[6,3]].forEach(function(p,k){var px=x-96+p[0]*24+12,py=y-46+p[1]*18+12;C(px,py-12,5,k%2?"#e87500":"#154734");R(px-6,py-8,12,14,k%2?"#e87500":"#154734",3);});}
+function tree(x,y){c.fillStyle="rgba(0,0,0,.15)";c.beginPath();c.ellipse(x,y+2,22,7,0,0,7);c.fill();R(x-4,y-26,8,28,"#6b4a2b");C(x,y-42,22,"#d9631e");C(x-12,y-32,14,"#e8962e");C(x+12,y-34,15,"#b5452a");}
+function beacon(p,i){
+  var d=done.indexOf(i)>-1,a=d?.12:.35+.15*Math.sin(tick*.06);
+  var g=c.createLinearGradient(0,p.y-260,0,p.y);g.addColorStop(0,"rgba(255,160,40,0)");g.addColorStop(1,d?"rgba(80,220,120,"+a+")":"rgba(255,160,40,"+a+")");
+  c.fillStyle=g;c.fillRect(p.x-14,p.y-260,28,260);
+  c.strokeStyle=d?"#54d27c":"#ffb84d";c.lineWidth=3;c.beginPath();c.ellipse(p.x,p.y+4,34+3*Math.sin(tick*.08),11,0,0,7);c.stroke();
+  c.fillStyle="#fff";c.strokeStyle="rgba(15,42,30,.8)";c.lineWidth=4;c.font="700 15px Cinzel,serif";c.textAlign="center";
+  c.strokeText(p.n,p.x,p.y+32);c.fillText(p.n,p.x,p.y+32);
+}
+function drawHero(){var x=hero.x,y=hero.y,b=Math.abs(Math.sin(hero.w))*3;
+  c.fillStyle="rgba(0,0,0,.2)";c.beginPath();c.ellipse(x,y+2,14,5,0,0,7);c.fill();
+  c.save();c.translate(x,y-b);c.scale(hero.f,1);
+  R(-14,-30,10,18,"#154734",4);R(-9,-31,18,20,"#e87500",6);R(-7,-12,6,12+Math.sin(hero.w)*2,"#2b3a55",2);R(1,-12,6,12-Math.sin(hero.w)*2,"#2b3a55",2);
+  C(0,-40,10,"#f2c7a0");c.fillStyle="#2a1a10";c.beginPath();c.arc(0,-43,10.5,3.3,6.1);c.fill();C(4,-40,1.5,"#222");R(-8,-60,16,13,"#2a2a2a");R(-13,-48,26,4,"#2a2a2a");R(-8,-52,16,3,"#e9c46a");
+  c.save();c.translate(10,-22);c.rotate(.5);R(-2,-12,4,18,"#f0c020",1);R(-2,6,4,4,"#f08080");c.restore();c.restore();}
+function drawSp(){sp.x+=(hero.x-26-sp.x)*.07;sp.y+=(hero.y-62+Math.sin(tick*.1)*6-sp.y)*.07;
+  var g=c.createRadialGradient(sp.x,sp.y,1,sp.x,sp.y,16);g.addColorStop(0,"#fff");g.addColorStop(.4,"rgba(255,170,60,.9)");g.addColorStop(1,"rgba(255,140,0,0)");
+  c.fillStyle=g;c.beginPath();c.arc(sp.x,sp.y,16,0,7);c.fill();
+  if(tick%3==0)parts.push({x:sp.x,y:sp.y,vx:(Math.random()-.5)*.6,vy:.4,l:24,c:"255,190,80"});}
+function burst(x,y){for(var i=0;i<46;i++){var a=Math.random()*6.28,s=1+Math.random()*4;parts.push({x:x,y:y-30,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,l:60,c:i%2?"232,117,0":"60,200,110"});}}
+var lv=[];for(var q=0;q<26;q++)lv.push({x:Math.random()*W,y:Math.random()*H,v:.5+Math.random(),r:Math.random()*6,c:["#d9631e","#e8962e","#b5452a","#c9a227"][q%4]});
+function drawLeaves(){lv.forEach(function(l){l.y+=l.v;l.x+=Math.sin(tick*.03+l.r)*.8;l.r+=.03;if(l.y>H){l.y=-10;l.x=Math.random()*W;}c.save();c.translate(l.x,l.y);c.rotate(l.r);c.fillStyle=l.c;c.beginPath();c.ellipse(0,0,6,3,0,0,7);c.fill();c.restore();});}
+function pump(x,y,s){c.fillStyle="#e8710a";c.beginPath();c.ellipse(x,y,14*s,11*s,0,0,7);c.fill();c.strokeStyle="#b8500a";c.lineWidth=1.5;c.beginPath();c.ellipse(x,y,6*s,11*s,0,0,7);c.stroke();R(x-2*s,y-14*s,4*s,6*s,"#5a7a2a");}
+function drawParts(){parts=parts.filter(function(p){return p.l>0;});parts.forEach(function(p){p.x+=p.vx;p.y+=p.vy;p.vy+=.04;p.l--;c.fillStyle="rgba("+p.c+","+Math.min(1,p.l/30)+")";c.fillRect(p.x,p.y,3,3);});}
+function typeIt(s){dp.textContent="";db.style.visibility="hidden";var i=0,t=setInterval(function(){dp.textContent=s.slice(0,++i);if(i>=s.length){clearInterval(t);db.style.visibility="visible";db.focus();}},16);}
+function show(i){open=true;cur=i;tgt=null;dt.textContent=L[i].n+": "+L[i].t;db.textContent="Give thanks";dlg.classList.add("on");typeIt(L[i].s);}
+db.onclick=function(){
+  if(fin){location.reload();return;}
+  done.push(cur);hud[done.length-1].classList.add("on");burst(L[cur].x,L[cur].y);
+  if(done.length===4){fin=true;say("We did it! Read the last scroll.");dt.textContent="The Point";db.textContent="Play again";typeIt("The writing was never really about the writing. We do it every week to practice thinking for ourselves, to connect with each other, to know ourselves a little better, and to see how differently everyone sees the world. Four things to be thankful for, one big table. Happy Thanksgiving! 🦃");return;}
+  open=false;dlg.classList.remove("on");say((4-done.length)+" more to go! Look for the glowing beacons.");
+};
+function update(){
+  if(open)return;var dx=0,dy=0;
+  if(keys.ArrowLeft||keys.a)dx--;if(keys.ArrowRight||keys.d)dx++;if(keys.ArrowUp||keys.w)dy--;if(keys.ArrowDown||keys.s)dy++;
+  if(dx||dy)tgt=null;else if(tgt){var ex=tgt.x-hero.x,ey=tgt.y-hero.y,d=Math.hypot(ex,ey);if(d>4){dx=ex/d;dy=ey/d;}}
+  if(dx||dy){var m=Math.hypot(dx,dy);hero.x=Math.max(20,Math.min(W-20,hero.x+dx/m*2.8));hero.y=Math.max(250,Math.min(H-8,hero.y+dy/m*2.8));hero.w+=.3;if(dx)hero.f=dx<0?-1:1;}
+  for(var i=0;i<4;i++)if(done.indexOf(i)<0&&Math.hypot(hero.x-L[i].x,hero.y-L[i].y)<34){show(i);break;}
+}
+function frame(){tick++;update();sky();paths();[[290,430,1],[505,440,1.1],[60,400,1.2],[740,400,1],[250,300,.9]].forEach(function(p){pump(p[0],p[1],p[2]);});
+  library(L[0].x,L[0].y);plinth(L[1].x,L[1].y);jindal(L[2].x,L[2].y);chess(L[3].x,L[3].y);
+  L.forEach(beacon);
+  var items=trees.map(function(t){return{y:t[1],f:function(){tree(t[0],t[1]);}};});
+  items.push({y:hero.y,f:drawHero});items.sort(function(a,b){return a.y-b.y;}).forEach(function(o){o.f();});
+  drawSp();drawLeaves();drawParts();requestAnimationFrame(frame);}
+addEventListener("keydown",function(e){var k=e.key.length>1?e.key:e.key.toLowerCase();if("ArrowUpArrowDownArrowLeftArrowRightwasd".indexOf(k)>-1){keys[k]=1;e.preventDefault();}});
+addEventListener("keyup",function(e){var k=e.key.length>1?e.key:e.key.toLowerCase();keys[k]=0;});
+function pt(e){var r=cv.getBoundingClientRect();tgt={x:(e.clientX-r.left)/r.width*W,y:Math.max(250,(e.clientY-r.top)/r.height*H)};}
+cv.addEventListener("pointerdown",function(e){pd=true;pt(e);});
+cv.addEventListener("pointermove",function(e){if(pd)pt(e);});
+addEventListener("pointerup",function(){pd=false;});
+frame();
+</script>
+</body>
+</html>
